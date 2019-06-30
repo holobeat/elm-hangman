@@ -8,7 +8,6 @@ Elm-hangman features a list of guess words (theme: animals) and a stage done
 with ASCII graphics. Each failed guess adds one part on the hangman stage.
 Completed hangman stage results in a loss.
 
-You can test the game directly with `elm reactor`.
+You can test the game on https://ellie-app.com/5XBvXxMfw7qa1.
 
-To change the guess word list, edit file **Definitions.elm** and update
-the *wordList*.
+To change the guess word list, update the *wordList*.
