@@ -6,11 +6,13 @@ the whole word. Each wrong guess adds one part to the hangman stage.
 -}
 
 import Browser
+import Browser.Events
 import Html exposing (Html, div, pre, text, br, button, node)
 import Html.Events exposing (onClick)
 import Html.Attributes exposing (style, rel, href)
 import Html.Events exposing (onClick)
 import Random
+import Json.Decode as Decode
 import Debug exposing (log)
 import Definitions
     exposing
@@ -20,7 +22,15 @@ import Definitions
         , stageWidth
         , stageHeight
         , wordList
+        , alphabet
         )
+
+
+{-| Type for KeyPress message
+-}
+type KeyType
+    = Alpha Char
+    | Ignored
 
 
 {-| Messages of the game.
@@ -30,6 +40,7 @@ type Msg
     | Restart
     | NewRandomNumber Int
     | NextWord
+    | KeyPressed KeyType
 
 
 {-| All possible statuses of the game.
@@ -51,6 +62,29 @@ type alias Model =
     , word : String
     , wordProgress : String
     }
+
+
+{-| Decoder for the pressed key
+-}
+keyDecoder : Decode.Decoder Msg
+keyDecoder =
+    Decode.map toAlphaKey (Decode.field "key" Decode.string)
+
+
+{-| Classify the KeyPressed message. We will ignore characters outside
+the 'alphabet' constant.
+-}
+toAlphaKey : String -> Msg
+toAlphaKey string =
+    case String.uncons string of
+        Just ( char, _ ) ->
+            if String.contains (String.fromChar char) alphabet then
+                KeyPressed (Alpha char)
+            else
+                KeyPressed Ignored
+
+        _ ->
+            KeyPressed Ignored
 
 
 {-| Apply mask of characters from 'template' to current stage. The selection
@@ -148,39 +182,7 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         GuessedChar char ->
-            let
-                nextStep =
-                    model.step + 1
-
-                correctGuess =
-                    String.contains (String.fromChar char) model.word
-
-                nextWordProgress =
-                    revealLetter char model.word model.wordProgress
-            in
-                if correctGuess then
-                    ( { model
-                        | wordProgress = nextWordProgress
-                        , gameStatus =
-                            if model.word == nextWordProgress then
-                                Won
-                            else
-                                Playing
-                      }
-                    , Cmd.none
-                    )
-                else
-                    ( { model
-                        | step = nextStep
-                        , stage = placePart nextStep template sequence model.stage
-                        , gameStatus =
-                            if nextStep == lastSequence then
-                                Lost
-                            else
-                                Playing
-                      }
-                    , Cmd.none
-                    )
+            evalGuess char model
 
         Restart ->
             ( { model
@@ -224,10 +226,64 @@ update msg model =
                         - 1
             )
 
+        KeyPressed keyType ->
+            case keyType of
+                Alpha char ->
+                    evalGuess (Char.toUpper char) model
+
+                Ignored ->
+                    ( model, Cmd.none )
+
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Sub.none
+    Browser.Events.onKeyPress keyDecoder
+
+
+{-| Evaluate guess of the character from the player. This function is called
+from 'update', after pressing the UI button or key on the keyboard.
+-}
+evalGuess : Char -> Model -> ( Model, Cmd Msg )
+evalGuess char model =
+    let
+        trimCues =
+            \x -> String.dropLeft 1 x |> String.dropRight 1
+
+        nextStep =
+            model.step + 1
+
+        correctGuess =
+            String.contains (String.fromChar char) <| trimCues model.word
+
+        alreadyGuessed =
+            String.contains (String.fromChar char) <| log "trimmed" <| trimCues model.wordProgress
+
+        nextWordProgress =
+            revealLetter char model.word model.wordProgress
+    in
+        if correctGuess && not alreadyGuessed then
+            ( { model
+                | wordProgress = nextWordProgress
+                , gameStatus =
+                    if model.word == nextWordProgress then
+                        Won
+                    else
+                        Playing
+              }
+            , Cmd.none
+            )
+        else
+            ( { model
+                | step = nextStep
+                , stage = placePart nextStep template sequence model.stage
+                , gameStatus =
+                    if nextStep == lastSequence then
+                        Lost
+                    else
+                        Playing
+              }
+            , Cmd.none
+            )
 
 
 {-| Pick a member from the List by index and return the member and a new
@@ -355,12 +411,12 @@ viewGame model =
     div []
         [ div [ style "font-size" "1.5em" ] [ text model.wordProgress ]
         , br [] []
-        , viewKeyboard model
+        , viewKeyboard
         ]
 
 
-viewKeyboard : Model -> Html Msg
-viewKeyboard model =
+viewKeyboard : Html Msg
+viewKeyboard =
     let
         alphabet =
             String.toList "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
