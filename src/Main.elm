@@ -227,12 +227,15 @@ update msg model =
             )
 
         KeyPressed keyType ->
-            case keyType of
-                Alpha char ->
-                    evalGuess (Char.toUpper char) model
+            if model.gameStatus /= Playing then
+                ( model, Cmd.none )
+            else
+                case keyType of
+                    Alpha char ->
+                        evalGuess (Char.toUpper char) model
 
-                Ignored ->
-                    ( model, Cmd.none )
+                    Ignored ->
+                        ( model, Cmd.none )
 
 
 subscriptions : Model -> Sub Msg
@@ -256,7 +259,7 @@ evalGuess char model =
             String.contains (String.fromChar char) <| trimCues model.word
 
         alreadyGuessed =
-            String.contains (String.fromChar char) <| log "trimmed" <| trimCues model.wordProgress
+            String.contains (String.fromChar char) <| trimCues model.wordProgress
 
         nextWordProgress =
             revealLetter char model.word model.wordProgress
@@ -418,7 +421,7 @@ viewGame model =
 viewKeyboard : Html Msg
 viewKeyboard =
     let
-        alphabet =
+        alphabet_ =
             String.toList "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     in
         div [] <|
@@ -427,7 +430,7 @@ viewKeyboard =
                     button ([ onClick (GuessedChar x) ] ++ styleKeyboadButton)
                         [ text <| String.fromChar x ]
                 )
-                alphabet
+                alphabet_
 
 
 styleKeyboadButton : List (Html.Attribute Msg)
